@@ -87,13 +87,21 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3" Margin="2" Background="White" Padding="3" MinHeight="60">
-                                    <StackPanel Orientation="Horizontal">
-                                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,5,5,0"/>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Number, StringFormat='Слайд {0}'}" FontWeight="Bold" Margin="0,0,0,2"/>
-                                            <Image Source="{Binding Thumbnail}" Height="60" Stretch="Uniform" HorizontalAlignment="Left"/>
+                                <Border BorderBrush="#CCCCCC" BorderThickness="1"
+                                    CornerRadius="3" Margin="4" Padding="6" Background="White">
+                                    <StackPanel>
+                                        <!-- Верхняя строка -->
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="{Binding Number, StringFormat='Слайд {0}'}"
+                                                FontWeight="Bold" VerticalAlignment="Center"/>
                                         </StackPanel>
+                                        <!-- Миниатюра -->
+                                        <Image Source="{Binding Thumbnail}"
+                                            Height="70" Stretch="Uniform" Margin="0,4,0,4"/>
+                                        <!-- Выбор фона -->
+                                        <RadioButton IsChecked="{Binding IsBackground}" GroupName="BackgroundSlide"
+                                            Content="Использовать как фон TOC" FontSize="11" Foreground="#444"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
@@ -106,21 +114,29 @@
                 <Border Background="#F0F0F0" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
                     <Viewbox Stretch="Uniform">
                         <!-- Uniform сохраняет пропорции -->
-                        <Canvas x:Name="PreviewCanvas" Background="White" Width="{Binding PreviewCanvasWidth}" Height="{Binding PreviewCanvasHeight}">
-                            <ItemsControl ItemsSource="{Binding PreviewItems}" ItemTemplate="{StaticResource PreviewItemTemplate}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemContainerStyle>
-                                    <Style TargetType="ContentPresenter">
-                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
-                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
-                                    </Style>
-                                </ItemsControl.ItemContainerStyle>
-                            </ItemsControl>
-                        </Canvas>
+                        <Grid>
+                            <!-- Фон -->
+                            <Image Source="{Binding PreviewBackGround}" Stretch="UniformToFill"/>
+                            <!-- Контент -->
+                            <Border BorderBrush="#CCCCCC" BorderThickness="1">
+                                <Canvas x:Name="PreviewCanvas" Width="{Binding PreviewCanvasWidth}" Height="{Binding PreviewCanvasHeight}"
+                                    Background="#80FFFFFF" > <!-- или Background="Transparent" -->
+                                    <ItemsControl ItemsSource="{Binding PreviewItems}" ItemTemplate="{StaticResource PreviewItemTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Canvas />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
+                                    </ItemsControl>
+                                </Canvas>
+                            </Border>
+                        </Grid>
                     </Viewbox>
                 </Border>
             </GroupBox>

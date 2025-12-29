@@ -43,6 +43,15 @@ namespace TocBuilder_dotnet_framework.ViewModels
         private float _actualSlideWidth = LayoutConstants.DefaultSlideWidth;
         private float _actualSlideHeight = LayoutConstants.DefaultSlideHeight;
 
+        public BitmapImage PreviewBackGround
+        {
+            get
+            {
+                var bg = Slides.FirstOrDefault(s => s.IsBackground);
+                return bg?.Thumbnail;
+            }
+        }
+
         public float ActualSlideWidth => _actualSlideWidth;
         public float ActualSlideHeight => _actualSlideHeight;
 
@@ -90,6 +99,12 @@ namespace TocBuilder_dotnet_framework.ViewModels
             get => _isBusy;
             set { _isBusy = value; OnPropertyChanged(); UpdateCanGenerate(); }
         }
+        public int SelectedBackgroundSlideIndex =>
+            Slides
+                .Select((s, i) => new { Slide = s, Index = i })
+                .FirstOrDefault(x => x.Slide.IsBackground)
+                ?.Index
+            ?? 0; // fallback: первый слайд
 
         public bool CanGenerate => !IsBusy && Slides.Any(s => s.IsSelected);
 
@@ -130,6 +145,23 @@ namespace TocBuilder_dotnet_framework.ViewModels
             {
                 UpdatePreview();
                 UpdateCanGenerate();
+            }
+            else if (e.PropertyName == nameof(SlideItem.IsBackground))
+            {
+                var changedSlide = sender as SlideItem;
+                if (changedSlide.IsBackground)
+                {
+                    // Снимаем IsBackground с других слайдов
+                    foreach (var slide in Slides)
+                    {
+                        if (slide != changedSlide && slide.IsBackground)
+                            slide.IsBackground = false;
+                    }
+                }
+
+                // Обновляем фон превью
+                OnPropertyChanged(nameof(PreviewBackGround));
+                UpdatePreview();
             }
         }
 
@@ -184,6 +216,9 @@ namespace TocBuilder_dotnet_framework.ViewModels
                 return;
             }
 
+            IsBusy = true;
+            Status = "Обновление превью...";
+
             int columnsForCalc = UseFixedColumns ? Columns : -1;
             var layoutInfo = LayoutCalculatorService.CalculateOptimalLayout(
                     selectedSlides.Count,
@@ -208,9 +243,10 @@ namespace TocBuilder_dotnet_framework.ViewModels
                 foreach (var item in previewItems)
                     PreviewItems.Add(item);
             });
+
+            IsBusy = false;
+            Status = "Превью обновлено";
         }
-
-
 
         private void GenerateToc()
         {
@@ -222,7 +258,7 @@ namespace TocBuilder_dotnet_framework.ViewModels
             try
             {
                 var selectedSlides = Slides.Where(s => s.IsSelected).ToList();
-                string outputPath = _tocService.CreateTableOfContents(FilePath, selectedSlides, Columns, Margin);
+                string outputPath = _tocService.CreateTableOfContents(FilePath, selectedSlides, Columns, Margin, SelectedBackgroundSlideIndex);
 
                 Status = $"✅ Готово! Файл сохранён: {Path.GetFileName(outputPath)}";
 

@@ -30,7 +30,8 @@ namespace TocBuilder_dotnet_framework.Services
             string inputPath,
             List<Models.SlideItem> slides,
             int columns,
-            int margin)
+            int margin,
+            int backgroundSlideIndex)
         {
             Application pptApp = null;
             Presentation pres = null;
@@ -83,7 +84,8 @@ namespace TocBuilder_dotnet_framework.Services
                     slides,
                     columns,
                     margin,
-                    tempDir);
+                    tempDir,
+                    backgroundSlideIndex);
 
                 return outputPath;
             }
@@ -93,175 +95,14 @@ namespace TocBuilder_dotnet_framework.Services
             }
         }
 
-
-        //public string CreateTableOfContents(string inputPath, List<Models.SlideItem> slides, int columns, int margin)
-        //{
-        //    Application pptApp = null;
-        //    Presentation pres = null;
-        //    string outputPath = GetOutputPath(inputPath);
-
-        //    try
-        //    {
-        //        File.Copy(inputPath, outputPath, true);
-
-        //        pptApp = new Application { DisplayAlerts = PpAlertLevel.ppAlertsNone };
-        //        pres = pptApp.Presentations.Open(outputPath, MsoTriState.msoFalse, MsoTriState.msoFalse, MsoTriState.msoFalse);
-
-        //        // Добавляем слайд оглавления
-        //        Slide firstSlide = pres.Slides[1];
-        //        Slide tocSlide = pres.Slides.Add(pres.Slides.Count + 1, firstSlide.Layout);
-        //        tocSlide.Name = "Оглавление";
-        //        tocSlide.Design = firstSlide.Design;
-        //        tocSlide.ColorScheme = firstSlide.ColorScheme;
-
-        //        RemoveDefaultShapes(tocSlide);
-        //        AddTitle(tocSlide, "ОГЛАВЛЕНИЕ");
-
-        //        // Создаем временную папку для миниатюр
-        //        string tempDir = Path.Combine(Path.GetTempPath(), "toc_thumbs_" + Guid.NewGuid());
-        //        Directory.CreateDirectory(tempDir);
-
-        //        try
-        //        {
-        //            float slideWidth = pres.PageSetup.SlideWidth;
-        //            float slideHeight = pres.PageSetup.SlideHeight;
-
-        //            var layout = LayoutCalculatorService.CalculateOptimalLayout(slides.Count, margin, columns, slideWidth, slideHeight);
-        //            AddThumbnails(pres, tocSlide, slides, layout.Columns, margin, tempDir, layout);
-        //        }
-        //        finally
-        //        {
-        //            TryDeleteFolder(tempDir);
-        //        }
-
-        //        pres.Save();
-        //    }
-        //    finally
-        //    {
-        //        if (pres != null) { pres.Close(); Marshal.ReleaseComObject(pres); }
-        //        if (pptApp != null) { pptApp.Quit(); Marshal.ReleaseComObject(pptApp); }
-        //    }
-
-        //    ApplyOpenXmlHyperlinks(outputPath);
-        //    return outputPath;
-        //}
-
-        private void AddThumbnails(Presentation pres, Slide tocSlide, List<Models.SlideItem> slides, int columns, int margin, string tempDir, (int Columns, float ThumbWidth, float ThumbHeight, float RowHeight) layout)
-        {
-            float yStart = LayoutConstants.TitleHeight;
-            float captionHeight = LayoutConstants.CaptionHeight;
-
-            for (int i = 0; i < slides.Count; i++)
-            {
-                int row = i / columns;
-                int col = i % columns;
-
-                float x = margin + col * (layout.ThumbWidth + margin);
-                float y = yStart + row * layout.RowHeight;
-
-                AddThumbnail(pres, tocSlide, slides[i], x, y, layout.ThumbWidth, layout.ThumbHeight, captionHeight, tempDir);
-            }
-        }
-
-        private void AddThumbnail(Presentation pres, Slide tocSlide, Models.SlideItem slideItem, float x, float y, float width, float height, float captionHeight, string tempDir)
-        {
-            string path = Path.Combine(tempDir, $"slide_{slideItem.Number}.png");
-            pres.Slides[slideItem.Number].Export(path, "PNG", (int)(width * 4), (int)(height * 4));
-
-            string guid = $"thumb_{slideItem.Number}";
-            Shape pic = tocSlide.Shapes.AddPicture(path, MsoTriState.msoFalse, MsoTriState.msoTrue, x, y, width, height);
-            pic.Name = guid;
-
-            Shape caption = tocSlide.Shapes.AddTextbox(
-                MsoTextOrientation.msoTextOrientationHorizontal,
-                x, y + height, width, captionHeight);
-            caption.TextFrame.TextRange.Text = $"Слайд {slideItem.Number}";
-            caption.TextFrame.TextRange.Font.Size = 12;
-            caption.TextFrame.TextRange.Font.Bold = MsoTriState.msoTrue;
-            caption.TextFrame.TextRange.ParagraphFormat.Alignment = PpParagraphAlignment.ppAlignCenter;
-
-            // Make caption background semi-transparent
-            caption.Fill.ForeColor.RGB = 0xFFFFFF;
-            caption.Fill.Transparency = 0.7f;
-
-            Shape frame = tocSlide.Shapes.AddShape(MsoAutoShapeType.msoShapeRectangle, x, y, width, height);
-            frame.Fill.Visible = MsoTriState.msoFalse;
-            frame.Line.ForeColor.RGB = 0x808080;
-            frame.Line.Weight = 1.5f;
-
-            _pendingLinks.Add(new TocLinkInfo { ShapeGuid = guid, SlideNumber = slideItem.Number });
-        }
-
-        private void AddTitle(Slide slide, string text)
-        {
-            float width = slide.Parent.PageSetup.SlideWidth - 100;
-            Shape title = slide.Shapes.AddTextbox(MsoTextOrientation.msoTextOrientationHorizontal, 50, 30, width, 60);
-            title.TextFrame.TextRange.Text = text;
-            title.TextFrame.TextRange.Font.Size = 36;
-            title.TextFrame.TextRange.Font.Bold = MsoTriState.msoTrue;
-            title.TextFrame.TextRange.ParagraphFormat.Alignment = PpParagraphAlignment.ppAlignCenter;
-        }
-
-        private void RemoveDefaultShapes(Slide slide)
-        {
-            foreach (Shape s in slide.Shapes.Cast<Shape>().ToList())
-                if (s.Type == MsoShapeType.msoPlaceholder)
-                    s.Delete();
-        }
-
-        private void ApplyOpenXmlHyperlinks(string pptxPath)
-        {
-            using (PresentationDocument doc = PresentationDocument.Open(pptxPath, true))
-            {
-                var presPart = doc.PresentationPart;
-                if (presPart == null) return;
-
-                var slideParts = presPart.SlideParts.ToList();
-                if (!slideParts.Any()) return;
-
-                // TOC slide - последний
-                var tocSlidePart = slideParts.Last();
-                var tocSlide = tocSlidePart.Slide;
-
-                foreach (var pic in tocSlide.Descendants<DocumentFormat.OpenXml.Presentation.Picture>())
-                {
-                    var shapeName = pic.NonVisualPictureProperties?.NonVisualDrawingProperties?.Name?.Value;
-
-                    if (shapeName?.StartsWith("thumb_") == true)
-                    {
-                        if (int.TryParse(shapeName.Substring(6), out int slideNumber))
-                        {
-                            if (slideNumber >= 1 && slideNumber <= slideParts.Count)
-                            {
-                                var targetSlidePart = slideParts[slideNumber - 1];
-
-                                tocSlidePart.AddPart(targetSlidePart);
-
-                                string relId = tocSlidePart.GetIdOfPart(targetSlidePart);
-
-                                pic.NonVisualPictureProperties
-                                   .NonVisualDrawingProperties
-                                   .HyperlinkOnClick = new A.HyperlinkOnClick
-                                   {
-                                       Id = relId,
-                                       Action = "ppaction://hlinksldjump"
-                                   };
-
-                            }
-                        }
-                    }
-                }
-
-                tocSlide.Save();
-            }
-        }
-
         private void BuildTocSlideOpenXml(
             string pptxPath,
             List<Models.SlideItem> slides,
             int columns,
             int margin,
-            string tempDir)
+            string tempDir,
+            int backgroundSlideIndex
+        )
         {
             using (var doc = PresentationDocument.Open(pptxPath, true))
             {
@@ -269,8 +110,14 @@ namespace TocBuilder_dotnet_framework.Services
                 var slideIds = presPart.Presentation.SlideIdList.Elements<SlideId>().ToList();
 
                 // layout
-                var layoutSource = (SlidePart)presPart.GetPartById(slideIds[0].RelationshipId);
-                var layoutPart = layoutSource.SlideLayoutPart;
+                if (backgroundSlideIndex < 0 || backgroundSlideIndex >= slideIds.Count)
+                    throw new ArgumentOutOfRangeException(nameof(backgroundSlideIndex));
+
+                var backgroundSlideId = slideIds[backgroundSlideIndex];
+                var backgroundSlidePart =
+                    (SlidePart)presPart.GetPartById(backgroundSlideId.RelationshipId);
+                var layoutPart = backgroundSlidePart.SlideLayoutPart;
+
 
                 // TOC
                 var tocPart = presPart.AddNewPart<SlidePart>();
@@ -455,5 +302,169 @@ namespace TocBuilder_dotnet_framework.Services
         {
             if (!_disposed) { _disposed = true; GC.SuppressFinalize(this); }
         }
+
+
+
+        //public string CreateTableOfContents(string inputPath, List<Models.SlideItem> slides, int columns, int margin)
+        //{
+        //    Application pptApp = null;
+        //    Presentation pres = null;
+        //    string outputPath = GetOutputPath(inputPath);
+
+        //    try
+        //    {
+        //        File.Copy(inputPath, outputPath, true);
+
+        //        pptApp = new Application { DisplayAlerts = PpAlertLevel.ppAlertsNone };
+        //        pres = pptApp.Presentations.Open(outputPath, MsoTriState.msoFalse, MsoTriState.msoFalse, MsoTriState.msoFalse);
+
+        //        // Добавляем слайд оглавления
+        //        Slide firstSlide = pres.Slides[1];
+        //        Slide tocSlide = pres.Slides.Add(pres.Slides.Count + 1, firstSlide.Layout);
+        //        tocSlide.Name = "Оглавление";
+        //        tocSlide.Design = firstSlide.Design;
+        //        tocSlide.ColorScheme = firstSlide.ColorScheme;
+
+        //        RemoveDefaultShapes(tocSlide);
+        //        AddTitle(tocSlide, "ОГЛАВЛЕНИЕ");
+
+        //        // Создаем временную папку для миниатюр
+        //        string tempDir = Path.Combine(Path.GetTempPath(), "toc_thumbs_" + Guid.NewGuid());
+        //        Directory.CreateDirectory(tempDir);
+
+        //        try
+        //        {
+        //            float slideWidth = pres.PageSetup.SlideWidth;
+        //            float slideHeight = pres.PageSetup.SlideHeight;
+
+        //            var layout = LayoutCalculatorService.CalculateOptimalLayout(slides.Count, margin, columns, slideWidth, slideHeight);
+        //            AddThumbnails(pres, tocSlide, slides, layout.Columns, margin, tempDir, layout);
+        //        }
+        //        finally
+        //        {
+        //            TryDeleteFolder(tempDir);
+        //        }
+
+        //        pres.Save();
+        //    }
+        //    finally
+        //    {
+        //        if (pres != null) { pres.Close(); Marshal.ReleaseComObject(pres); }
+        //        if (pptApp != null) { pptApp.Quit(); Marshal.ReleaseComObject(pptApp); }
+        //    }
+
+        //    ApplyOpenXmlHyperlinks(outputPath);
+        //    return outputPath;
+        //}
+
+        //private void AddThumbnails(Presentation pres, Slide tocSlide, List<Models.SlideItem> slides, int columns, int margin, string tempDir, (int Columns, float ThumbWidth, float ThumbHeight, float RowHeight) layout)
+        //{
+        //    float yStart = LayoutConstants.TitleHeight;
+        //    float captionHeight = LayoutConstants.CaptionHeight;
+
+        //    for (int i = 0; i < slides.Count; i++)
+        //    {
+        //        int row = i / columns;
+        //        int col = i % columns;
+
+        //        float x = margin + col * (layout.ThumbWidth + margin);
+        //        float y = yStart + row * layout.RowHeight;
+
+        //        AddThumbnail(pres, tocSlide, slides[i], x, y, layout.ThumbWidth, layout.ThumbHeight, captionHeight, tempDir);
+        //    }
+        //}
+
+        //private void AddThumbnail(Presentation pres, Slide tocSlide, Models.SlideItem slideItem, float x, float y, float width, float height, float captionHeight, string tempDir)
+        //{
+        //    string path = Path.Combine(tempDir, $"slide_{slideItem.Number}.png");
+        //    pres.Slides[slideItem.Number].Export(path, "PNG", (int)(width * 4), (int)(height * 4));
+
+        //    string guid = $"thumb_{slideItem.Number}";
+        //    Shape pic = tocSlide.Shapes.AddPicture(path, MsoTriState.msoFalse, MsoTriState.msoTrue, x, y, width, height);
+        //    pic.Name = guid;
+
+        //    Shape caption = tocSlide.Shapes.AddTextbox(
+        //        MsoTextOrientation.msoTextOrientationHorizontal,
+        //        x, y + height, width, captionHeight);
+        //    caption.TextFrame.TextRange.Text = $"Слайд {slideItem.Number}";
+        //    caption.TextFrame.TextRange.Font.Size = 12;
+        //    caption.TextFrame.TextRange.Font.Bold = MsoTriState.msoTrue;
+        //    caption.TextFrame.TextRange.ParagraphFormat.Alignment = PpParagraphAlignment.ppAlignCenter;
+
+        //    // Make caption background semi-transparent
+        //    caption.Fill.ForeColor.RGB = 0xFFFFFF;
+        //    caption.Fill.Transparency = 0.7f;
+
+        //    Shape frame = tocSlide.Shapes.AddShape(MsoAutoShapeType.msoShapeRectangle, x, y, width, height);
+        //    frame.Fill.Visible = MsoTriState.msoFalse;
+        //    frame.Line.ForeColor.RGB = 0x808080;
+        //    frame.Line.Weight = 1.5f;
+
+        //    _pendingLinks.Add(new TocLinkInfo { ShapeGuid = guid, SlideNumber = slideItem.Number });
+        //}
+
+        //private void AddTitle(Slide slide, string text)
+        //{
+        //    float width = slide.Parent.PageSetup.SlideWidth - 100;
+        //    Shape title = slide.Shapes.AddTextbox(MsoTextOrientation.msoTextOrientationHorizontal, 50, 30, width, 60);
+        //    title.TextFrame.TextRange.Text = text;
+        //    title.TextFrame.TextRange.Font.Size = 36;
+        //    title.TextFrame.TextRange.Font.Bold = MsoTriState.msoTrue;
+        //    title.TextFrame.TextRange.ParagraphFormat.Alignment = PpParagraphAlignment.ppAlignCenter;
+        //}
+
+        //private void RemoveDefaultShapes(Slide slide)
+        //{
+        //    foreach (Shape s in slide.Shapes.Cast<Shape>().ToList())
+        //        if (s.Type == MsoShapeType.msoPlaceholder)
+        //            s.Delete();
+        //}
+
+        //private void ApplyOpenXmlHyperlinks(string pptxPath)
+        //{
+        //    using (PresentationDocument doc = PresentationDocument.Open(pptxPath, true))
+        //    {
+        //        var presPart = doc.PresentationPart;
+        //        if (presPart == null) return;
+
+        //        var slideParts = presPart.SlideParts.ToList();
+        //        if (!slideParts.Any()) return;
+
+        //        // TOC slide - последний
+        //        var tocSlidePart = slideParts.Last();
+        //        var tocSlide = tocSlidePart.Slide;
+
+        //        foreach (var pic in tocSlide.Descendants<DocumentFormat.OpenXml.Presentation.Picture>())
+        //        {
+        //            var shapeName = pic.NonVisualPictureProperties?.NonVisualDrawingProperties?.Name?.Value;
+
+        //            if (shapeName?.StartsWith("thumb_") == true)
+        //            {
+        //                if (int.TryParse(shapeName.Substring(6), out int slideNumber))
+        //                {
+        //                    if (slideNumber >= 1 && slideNumber <= slideParts.Count)
+        //                    {
+        //                        var targetSlidePart = slideParts[slideNumber - 1];
+
+        //                        tocSlidePart.AddPart(targetSlidePart);
+
+        //                        string relId = tocSlidePart.GetIdOfPart(targetSlidePart);
+
+        //                        pic.NonVisualPictureProperties
+        //                           .NonVisualDrawingProperties
+        //                           .HyperlinkOnClick = new A.HyperlinkOnClick
+        //                           {
+        //                               Id = relId,
+        //                               Action = "ppaction://hlinksldjump"
+        //                           };
+
+        //                    }
+        //                }
+        //            }
+        //        }
+
+        //        tocSlide.Save();
+        //    }
+        //}
     }
 }

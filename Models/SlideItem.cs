@@ -13,7 +13,14 @@ namespace TocBuilder_dotnet_framework.Models
     {
         private bool _isSelected = true; 
         private int _number; 
-        private BitmapImage _thumbnail; 
+        private BitmapImage _thumbnail;
+        private bool _isBackground;
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; OnPropertyChanged(); }
+        }
 
         public int Number { get => _number; set { _number = value; OnPropertyChanged(); } }
 
@@ -23,10 +30,17 @@ namespace TocBuilder_dotnet_framework.Models
             set { _thumbnail = value; OnPropertyChanged(); } 
         }
 
-        public bool IsSelected 
-        { 
-            get => _isSelected; 
-            set { _isSelected = value; OnPropertyChanged(); } 
+        public bool IsBackground
+        {
+            get => _isBackground;
+            set
+            {
+                if (_isBackground != value)
+                {
+                    _isBackground = value;
+                    OnPropertyChanged();
+                }
+            }
         }
 
         public event PropertyChangedEventHandler PropertyChanged; 
