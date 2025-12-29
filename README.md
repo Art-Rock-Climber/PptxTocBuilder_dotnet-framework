@@ -1,1 +1,2 @@
-# TocBuilder_dotnet-framework
+# PptxTocBuilder — приложение для создания интерактивного содержания в презентации с кликабельными иконками слайдов
+Версия на C# .NET-Framework
