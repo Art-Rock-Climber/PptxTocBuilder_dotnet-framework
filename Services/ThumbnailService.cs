@@ -107,10 +107,10 @@ namespace TocBuilder_dotnet_framework.Services
 
                         if (cx.HasValue && cy.HasValue)
                         {
-                            const double EMU_PER_POINT = 12700.0;
-                            float widthPts = (float)(cx.Value / EMU_PER_POINT);
-                            float heightPts = (float)(cy.Value / EMU_PER_POINT);
-                            return (widthPts, heightPts);
+                            const double EMU_PER_PIXEL = 9525.0; // 1 пиксель = 9525 EMU при 96 DPI
+                            float widthPx = (float)(cx.Value / EMU_PER_PIXEL);
+                            float heightPx = (float)(cy.Value / EMU_PER_PIXEL);
+                            return (widthPx, heightPx);
                         }
                     }
                 }

@@ -1,4 +1,12 @@
-﻿<Window x:Class="TocBuilder_dotnet_framework.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local="clr-namespace:TocBuilder_dotnet_framework" xmlns:vm="clr-namespace:TocBuilder_dotnet_framework.ViewModels" xmlns:model="clr-namespace:TocBuilder_dotnet_framework.Models" mc:Ignorable="d" Title="Presentation TOC Builder" Height="700" Width="1200">
+﻿<Window x:Class="TocBuilder_dotnet_framework.MainWindow" 
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+        xmlns:local="clr-namespace:TocBuilder_dotnet_framework" 
+        xmlns:vm="clr-namespace:TocBuilder_dotnet_framework.ViewModels" 
+        xmlns:model="clr-namespace:TocBuilder_dotnet_framework.Models" 
+        mc:Ignorable="d" Title="Presentation TOC Builder" Height="700" Width="1100">
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
@@ -11,7 +19,7 @@
         <DataTemplate x:Key="PreviewItemTemplate" DataType="model:PreviewItem">
             <Border BorderBrush="#CCCCCC" BorderThickness="1" Background="White" Padding="2">
                 <StackPanel>
-                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" MaxWidth="{Binding Width}" MaxHeight="{Binding Height}"/>
+                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" MaxWidth="{Binding Width}" MaxHeight="{Binding Height}"/> 
                     <TextBlock Text="{Binding Caption}" FontSize="10" HorizontalAlignment="Center" FontWeight="Bold" Margin="0,2,0,0"/>
                 </StackPanel>
             </Border>
@@ -66,12 +74,18 @@
                     <Button Content="Выбрать все" Command="{Binding SelectAllCommand}"/>
                     <Button Content="Снять все" Command="{Binding DeselectAllCommand}"/>
                 </StackPanel>
+                <StackPanel Margin="20,0,0,0">
+                    <TextBlock Text="Масштаб превью:" Margin="0,0,0,5"/>
+                    <Slider x:Name="ZoomSlider" Minimum="0.1" Maximum="2.0" Value="{Binding PreviewScale}" 
+            Width="100" TickFrequency="0.1" IsSnapToTickEnabled="True"/>
+                    <TextBlock Text="{Binding PreviewScale, StringFormat='{}{0:P0}'}" HorizontalAlignment="Center" FontWeight="Bold"/>
+                </StackPanel>
             </StackPanel>
         </GroupBox>
         <!-- Основная область (разделена на 2 колонки) -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="230"/>
                 <!-- Левая колонка для выбора слайдов -->
                 <ColumnDefinition Width="*"/>
                 <!-- Правая колонка для предпросмотра -->
@@ -110,34 +124,33 @@
                 </ScrollViewer>
             </GroupBox>
             <!-- Правая панель предпросмотра -->
-            <GroupBox Grid.Column="1" Header="Предпросмотр TOC">
+            <GroupBox Grid.Column="1" Header="Предпросмотр TOC" SizeChanged="PreviewGroupBox_SizeChanged">
                 <Border Background="#F0F0F0" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
-                    <Viewbox Stretch="Uniform">
-                        <!-- Uniform сохраняет пропорции -->
-                        <Grid>
-                            <!-- Фон -->
-                            <Image Source="{Binding PreviewBackGround}" Stretch="UniformToFill"/>
-                            <!-- Контент -->
-                            <Border BorderBrush="#CCCCCC" BorderThickness="1">
-                                <Canvas x:Name="PreviewCanvas" Width="{Binding PreviewCanvasWidth}" Height="{Binding PreviewCanvasHeight}"
-                                    Background="#80FFFFFF" > <!-- или Background="Transparent" -->
-                                    <ItemsControl ItemsSource="{Binding PreviewItems}" ItemTemplate="{StaticResource PreviewItemTemplate}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <Canvas />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemContainerStyle>
-                                            <Style TargetType="ContentPresenter">
-                                                <Setter Property="Canvas.Left" Value="{Binding X}" />
-                                                <Setter Property="Canvas.Top" Value="{Binding Y}" />
-                                            </Style>
-                                        </ItemsControl.ItemContainerStyle>
-                                    </ItemsControl>
-                                </Canvas>
-                            </Border>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <Grid Width="{Binding PreviewCanvasWidth}" Height="{Binding PreviewCanvasHeight}">
+                            <Grid.RenderTransform>
+                                <ScaleTransform ScaleX="{Binding PreviewScale}" ScaleY="{Binding PreviewScale}" />
+                            </Grid.RenderTransform>
+                            <!-- ФОН -->
+                            <Image Source="{Binding PreviewBackGround}" Width="{Binding PreviewCanvasWidth}" Height="{Binding PreviewCanvasHeight}" Stretch="Uniform" />
+                            <!-- КОНТЕНТ -->
+                            <Canvas Width="{Binding PreviewCanvasWidth}" Height="{Binding PreviewCanvasHeight}" Background="#80FFFFFF">
+                                <ItemsControl ItemsSource="{Binding PreviewItems}" ItemTemplate="{StaticResource PreviewItemTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Canvas />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                </ItemsControl>
+                            </Canvas>
                         </Grid>
-                    </Viewbox>
+                    </ScrollViewer>
                 </Border>
             </GroupBox>
         </Grid>

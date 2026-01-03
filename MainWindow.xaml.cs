@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using TocBuilder_dotnet_framework.ViewModels;
 
 namespace TocBuilder_dotnet_framework
 {
@@ -23,6 +24,18 @@ namespace TocBuilder_dotnet_framework
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        private void PreviewGroupBox_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                // Вычитаем отступы GroupBox (Header + Padding)
+                double viewportWidth = Math.Max(0, e.NewSize.Width);
+                double viewportHeight = Math.Max(0, e.NewSize.Height - 40);
+
+                vm.UpdatePreviewViewportSize(viewportWidth, viewportHeight);
+            }
         }
     }
 }

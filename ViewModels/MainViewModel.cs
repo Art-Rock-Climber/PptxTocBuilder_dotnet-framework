@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
@@ -28,6 +29,15 @@ namespace TocBuilder_dotnet_framework.ViewModels
         private double _previewCanvasWidth = LayoutConstants.DefaultSlideWidth;
         private double _previewCanvasHeight = LayoutConstants.DefaultSlideHeight;
 
+        private float _actualSlideWidth = LayoutConstants.DefaultSlideWidth;
+        private float _actualSlideHeight = LayoutConstants.DefaultSlideHeight;
+
+        private double _previewViewportWidth;
+        private double _previewViewportHeight;
+
+        private double _previewScale = 1.0;
+        private double _autoScale = 1.0;
+
         public double PreviewCanvasWidth
         {
             get => _previewCanvasWidth;
@@ -40,9 +50,6 @@ namespace TocBuilder_dotnet_framework.ViewModels
             set { _previewCanvasHeight = value; OnPropertyChanged(); }
         }
 
-        private float _actualSlideWidth = LayoutConstants.DefaultSlideWidth;
-        private float _actualSlideHeight = LayoutConstants.DefaultSlideHeight;
-
         public BitmapImage PreviewBackGround
         {
             get
@@ -50,6 +57,18 @@ namespace TocBuilder_dotnet_framework.ViewModels
                 var bg = Slides.FirstOrDefault(s => s.IsBackground);
                 return bg?.Thumbnail;
             }
+        }
+
+        public double PreviewScale
+        {
+            get => _previewScale;
+            set { _previewScale = value; OnPropertyChanged(); }
+        }
+
+        public double AutoScale
+        {
+            get => _autoScale;
+            set { _autoScale = value; OnPropertyChanged(); }
         }
 
         public float ActualSlideWidth => _actualSlideWidth;
@@ -64,7 +83,7 @@ namespace TocBuilder_dotnet_framework.ViewModels
                 {
                     _filePath = value;
                     OnPropertyChanged();
-                    LoadSlides();
+                    _ = LoadSlidesAsync();
                     UpdateCanGenerate();
                 }
             }
@@ -124,7 +143,8 @@ namespace TocBuilder_dotnet_framework.ViewModels
             Status = "Выберите презентацию";
 
             BrowseCommand = new RelayCommand(BrowseFile);
-            GenerateCommand = new RelayCommand(GenerateToc, () => CanGenerate);
+            //GenerateCommand = new RelayCommand(GenerateToc, () => CanGenerate);
+            GenerateCommand = new AsyncRelayCommand(async () => await GenerateTocAsync(), () => CanGenerate);
             SelectAllCommand = new RelayCommand(() => SelectAll(true));
             DeselectAllCommand = new RelayCommand(() => SelectAll(false));
 
@@ -174,7 +194,40 @@ namespace TocBuilder_dotnet_framework.ViewModels
             }
         }
 
-        private void LoadSlides()
+        //private void LoadSlides()
+        //{
+        //    Slides.Clear();
+        //    if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
+
+        //    IsBusy = true;
+        //    Status = "Загрузка слайдов...";
+
+        //    try
+        //    {
+        //        (_actualSlideWidth, _actualSlideHeight) = _thumbnailService.GetSlideDimensions(FilePath);
+        //        var slides = _thumbnailService.GetSlides(FilePath);
+        //        foreach (var slide in slides)
+        //        {
+        //            slide.PropertyChanged += Slide_PropertyChanged;
+        //            Slides.Add(slide);
+        //        }
+
+        //        Status = $"Загружено {Slides.Count} слайдов";
+        //        UpdatePreview();
+        //        UpdateCanGenerate();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Status = $"Ошибка: {ex.Message}";
+        //        MessageBox.Show($"Не удалось загрузить презентацию:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        //    }
+        //    finally
+        //    {
+        //        IsBusy = false;
+        //    }
+        //}
+
+        private async Task LoadSlidesAsync()
         {
             Slides.Clear();
             if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
@@ -184,8 +237,12 @@ namespace TocBuilder_dotnet_framework.ViewModels
 
             try
             {
-                (_actualSlideWidth, _actualSlideHeight) = _thumbnailService.GetSlideDimensions(FilePath);
-                var slides = _thumbnailService.GetSlides(FilePath);
+                // Запускаем в отдельном потоке с COM-инициализацией
+                var slides = await Task.Run(() => _thumbnailService.GetSlides(FilePath));
+                var dimensions = await Task.Run(() => _thumbnailService.GetSlideDimensions(FilePath));
+
+                (_actualSlideWidth, _actualSlideHeight) = dimensions;
+
                 foreach (var slide in slides)
                 {
                     slide.PropertyChanged += Slide_PropertyChanged;
@@ -209,46 +266,102 @@ namespace TocBuilder_dotnet_framework.ViewModels
 
         private void UpdatePreview()
         {
+            IsBusy = true;
+            Status = "Обновление превью...";
+
             var selectedSlides = Slides.Where(s => s.IsSelected).ToList();
             if (!selectedSlides.Any())
             {
                 PreviewItems.Clear();
+                IsBusy = false;
                 return;
             }
 
-            IsBusy = true;
-            Status = "Обновление превью...";
-
             int columnsForCalc = UseFixedColumns ? Columns : -1;
-            var layoutInfo = LayoutCalculatorService.CalculateOptimalLayout(
-                    selectedSlides.Count,
-                    Margin,
-                    columnsForCalc,
-                    _actualSlideWidth,
-                    _actualSlideHeight);
-            var previewItems = LayoutCalculatorService.GeneratePreviewItems(
-                    selectedSlides,
-                    columnsForCalc,
-                    Margin,
-                    _actualSlideWidth,
-                    _actualSlideHeight);
 
-            var (canvasWidth, canvasHeight) = LayoutCalculatorService.CalculateCanvasSize(previewItems);
+            var previewItems = LayoutCalculatorService.GeneratePreviewItems(
+                selectedSlides,
+                columnsForCalc,
+                Margin,
+                ActualSlideWidth,
+                ActualSlideHeight);
 
             Application.Current.Dispatcher.Invoke(() =>
             {
                 PreviewItems.Clear();
-                PreviewCanvasWidth = canvasWidth;
-                PreviewCanvasHeight = canvasHeight;
+
+                // реальный размер PPT-слайда
+                PreviewCanvasWidth = ActualSlideWidth;
+                PreviewCanvasHeight = ActualSlideHeight;
+
                 foreach (var item in previewItems)
                     PreviewItems.Add(item);
             });
+
+            CalculateAutoScale();
 
             IsBusy = false;
             Status = "Превью обновлено";
         }
 
-        private void GenerateToc()
+        private void CalculateAutoScale()
+        {
+            if (_previewViewportWidth <= 0 ||
+                _previewViewportHeight <= 0 ||
+                ActualSlideWidth <= 0 ||
+                ActualSlideHeight <= 0)
+                return;
+
+            double scaleX = _previewViewportWidth / ActualSlideWidth;
+            double scaleY = _previewViewportHeight / ActualSlideHeight;
+
+            AutoScale = Math.Min(scaleX, scaleY);
+            AutoScale = Math.Max(0.3, Math.Min(1.2, AutoScale));
+            PreviewScale = AutoScale;
+        }
+
+        public void UpdatePreviewViewportSize(double width, double height)
+        {
+            _previewViewportWidth = width;
+            _previewViewportHeight = height;
+
+            CalculateAutoScale();
+        }
+
+
+
+        //private void GenerateToc()
+        //{
+        //    if (!Slides.Any(s => s.IsSelected)) return;
+
+        //    IsBusy = true;
+        //    Status = "Создание оглавления...";
+
+        //    try
+        //    {
+        //        var selectedSlides = Slides.Where(s => s.IsSelected).ToList();
+        //        string outputPath = _tocService.CreateTableOfContents(FilePath, selectedSlides, Columns, Margin, SelectedBackgroundSlideIndex);
+
+        //        Status = $"✅ Готово! Файл сохранён: {Path.GetFileName(outputPath)}";
+
+        //        if (MessageBox.Show($"Оглавление создано!\n\nФайл: {outputPath}\n\nОткрыть презентацию?", "Готово", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+        //            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(outputPath) { UseShellExecute = true });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Status = $"❌ Ошибка: {ex.Message}";
+        //        MessageBox.Show($"Не удалось создать оглавление:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        //    }
+        //    finally
+        //    {
+        //        IsBusy = false;
+        //        UpdateCanGenerate();
+        //        GC.Collect();
+        //        GC.WaitForPendingFinalizers();
+        //    }
+        //}
+
+        private async Task GenerateTocAsync()
         {
             if (!Slides.Any(s => s.IsSelected)) return;
 
@@ -258,7 +371,9 @@ namespace TocBuilder_dotnet_framework.ViewModels
             try
             {
                 var selectedSlides = Slides.Where(s => s.IsSelected).ToList();
-                string outputPath = _tocService.CreateTableOfContents(FilePath, selectedSlides, Columns, Margin, SelectedBackgroundSlideIndex);
+
+                // Выполняем экспорт в отдельном потоке
+                string outputPath = await Task.Run(() => _tocService.CreateTableOfContents(FilePath, selectedSlides, Columns, Margin, SelectedBackgroundSlideIndex));
 
                 Status = $"✅ Готово! Файл сохранён: {Path.GetFileName(outputPath)}";
 
@@ -283,12 +398,13 @@ namespace TocBuilder_dotnet_framework.ViewModels
         {
             foreach (var slide in Slides) slide.IsSelected = select;
             UpdateCanGenerate();
+            UpdatePreview(); // Один вызов после всех изменений
         }
 
         private void UpdateCanGenerate()
         {
             OnPropertyChanged(nameof(CanGenerate));
-            if (GenerateCommand is RelayCommand cmd) cmd.RaiseCanExecuteChanged();
+            if (GenerateCommand is AsyncRelayCommand cmd) cmd.RaiseCanExecuteChanged();
         }
 
         #region INotifyPropertyChanged
@@ -296,6 +412,51 @@ namespace TocBuilder_dotnet_framework.ViewModels
         protected void OnPropertyChanged([CallerMemberName] string propName = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propName));
         #endregion
+    }
+
+    public class AsyncRelayCommand : ICommand
+    {
+        private readonly Func<Task> _execute;
+        private readonly Func<bool> _canExecute;
+        private bool _isExecuting;
+
+        public event EventHandler CanExecuteChanged;
+
+        public AsyncRelayCommand(Func<Task> execute, Func<bool> canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public bool CanExecute(object parameter)
+        {
+            return !_isExecuting && (_canExecute?.Invoke() ?? true);
+        }
+
+        public async void Execute(object parameter)
+        {
+            _isExecuting = true;
+            RaiseCanExecuteChanged();
+
+            try
+            {
+                await _execute();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _isExecuting = false;
+                RaiseCanExecuteChanged();
+            }
+        }
+
+        public void RaiseCanExecuteChanged()
+        {
+            CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public class RelayCommand : ICommand
